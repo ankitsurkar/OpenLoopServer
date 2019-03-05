@@ -4,4 +4,5 @@ from .models import *
 admin.site.register(EndUser)
 admin.site.register(Vendor)
 admin.site.register(PoS)
-#admin.site.register()
+admin.site.register(RFID)
+admin.site.register(Transaction)

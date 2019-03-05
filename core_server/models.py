@@ -41,5 +41,34 @@ class PoS(models.Model):
     class Meta:
         ordering=['pos_id']
 
+class RFID(models.Model):
+    rfid=models.AutoField(primary_key=True)
+    RFID_value=models.CharField(max_length=12,null=False,blank=False)
+    label=models.CharField(max_length=32,null=False)
+    is_enabled=models.BooleanField(default=True)
+    disability_reason=models.CharField(max_length=32,default='None')
+    user=models.ForeignKey(EndUser,on_delete=models.CASCADE,null=False)
+
+    def __str__(self):
+        return '%s:%s'%(self.user,self.label)
+
+    class Meta:
+        ordering=['rfid']
+
+class Transaction(models.Model):
+    transaction_id=models.AutoField(primary_key=True)
+    amount=models.IntegerField(null=False,default=0)
+    txn_status=models.CharField(null=False,max_length=7,
+        choices=(
+            ("success", "SUCCESS"),
+            ("failed", "FAIL"),
+            ("pending", "PENDING")))
+    lat=models.FloatField(default=0)
+    lan=models.FloatField(default=0)
+
+    user=models.ForeignKey(EndUser,on_delete=models.CASCADE,null=True)
+    vendor=models.ForeignKey(Vendor,on_delete=models.CASCADE,null=True)
+    RFID=models.ForeignKey(RFID,on_delete=models.CASCADE,null=True)
+    PoS=models.ForeignKey(PoS,on_delete=models.CASCADE,null=True)
 	
 	
