@@ -43,7 +43,7 @@ class PoS(models.Model):
 
 class RFID(models.Model):
     rfid=models.AutoField(primary_key=True)
-    RFID_value=models.CharField(max_length=12,null=False,blank=False)
+    rfid_value=models.CharField(max_length=128,null=False,blank=False)
     label=models.CharField(max_length=32,null=False)
     is_enabled=models.BooleanField(default=True)
     disability_reason=models.CharField(max_length=32,default='None')

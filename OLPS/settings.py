@@ -25,7 +25,7 @@ SECRET_KEY = '=qo*4gqrll5v+xtrc0%lxdpq)zsxmjof*k=v2hk-vb48a5)1v9'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['10.46.59.4']
+ALLOWED_HOSTS = ['10.44.123.5']
 
 
 # Application definition
@@ -38,7 +38,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'core_server.apps.CoreServerConfig',
-    'rest_framework'
+    'rest_framework',
+    'rest_framework.authtoken',
 ]
 
 MIDDLEWARE = [
@@ -77,8 +78,12 @@ WSGI_APPLICATION = 'OLPS.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'OLPS',
+        'USER' : 'mysql',
+        'PASSWORD' : 'Password@123',
+        'HOST' : 'localhost',
+        'PORT': '',
     }
 }
 
