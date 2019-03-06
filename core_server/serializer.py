@@ -7,3 +7,8 @@ class EndUserSerializer(serializers.Serializer):
     username = serializers.CharField(max_length = 32, required = True) 
 
 
+
+class LoginSerializer(serializers.Serializer):
+    username = serializers.CharField(max_length=32 , required = True)
+    password = serializers.CharField(max_length=32, required = True)
+
