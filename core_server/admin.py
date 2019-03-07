@@ -1,8 +1,7 @@
 from django.contrib import admin
-from .models import *
+from .models import EndUser,PoS,RFID,Transaction
 # Register your models here.
 admin.site.register(EndUser)
-admin.site.register(Vendor)
 admin.site.register(PoS)
 admin.site.register(RFID)
 admin.site.register(Transaction)

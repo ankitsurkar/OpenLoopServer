@@ -5,35 +5,22 @@ class EndUser(models.Model):
     acc_no=models.AutoField(primary_key=True)
     name=models.CharField(max_length=32,null=False)
     balance=models.IntegerField()
+    phone_no=models.CharField(max_length=13,null=False,default="100" )
     django_user=models.ForeignKey(User,unique=True,on_delete=models.CASCADE)
-
+    
     def __str__(self):
         return '%s:%s'%(self.acc_no,self.name)
 
     class Meta:
         ordering=['acc_no']
 
-class Vendor(models.Model):
-    vendor_no=models.AutoField(primary_key=True)
-    name=models.CharField(max_length=32,null=False)
-    balance=models.IntegerField()
-    django_user=models.ForeignKey(User,unique=True,on_delete=models.CASCADE)
-    accept_deffered_payments=models.BooleanField(default=False)
-
-
-    def __str__(self):
-        return '%s:%s'%(self.vendor_no,self.name)
-
-    class Meta:
-        ordering=['vendor_no']
-
 class PoS(models.Model):
     pos_id=models.AutoField(primary_key=True)
-    api_key=models.CharField(max_length=12,null=False,blank=False)
+    api_key=models.CharField(max_length=128,null=False,blank=False)
     label=models.CharField(max_length=32,null=False)
     is_enabled=models.BooleanField(default=True)
 
-    vendor=models.ForeignKey('Vendor',on_delete=models.CASCADE,null=False)
+    vendor=models.ForeignKey(EndUser,on_delete=models.CASCADE,null=False)
 
     def __str__(self):
         return '%s:%s'%(self.pos_id,self.label)
@@ -66,8 +53,8 @@ class Transaction(models.Model):
     lat=models.FloatField(default=0)
     lan=models.FloatField(default=0)
 
-    user=models.ForeignKey(EndUser,on_delete=models.CASCADE,null=True)
-    vendor=models.ForeignKey(Vendor,on_delete=models.CASCADE,null=True)
+    user=models.ForeignKey(EndUser,on_delete=models.CASCADE,null=True,related_name="User")
+    vendor=models.ForeignKey(EndUser,on_delete=models.CASCADE,null=True,related_name="Vendor")
     RFID=models.ForeignKey(RFID,on_delete=models.CASCADE,null=True)
     PoS=models.ForeignKey(PoS,on_delete=models.CASCADE,null=True)
 	
