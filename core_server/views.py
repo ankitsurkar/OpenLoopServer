@@ -39,12 +39,13 @@ class AddUser(APIView):
             user.save()
             enduser = EndUser.objects.create(balance = 0,django_user = user, name = serializer.validated_data['name'],phone_no = serializer.validated_data['phone_no'], is_vendor = serializer.validated_data['is_vendor'])       
             enduser.save()
-            spending_rule = SpendingRules(user = enduser)
+            spending_rule = SpendingRules.objects.create(user = enduser)
             spending_rule.save()
             return Response(data=serializer.data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+   
 class Login(APIView):
 
     def post(self, request, format=None):    
@@ -88,7 +89,7 @@ class PosView(APIView):
             return Response(data = PoSSerializer(pos).data,status=status.HTTP_201_CREATED)
         return Response(data=serializer.errors,status=status.HTTP_400_BAD_REQUEST)
 
-     #Returns a list of PoSs
+    #Returns a list of PoSs
     def get(self, request, format =None):
         enduser = EndUser.objects.get(django_user = request.user)
         pos = PoS.objects.filter(vendor = enduser)
@@ -255,9 +256,9 @@ class SpendingRuleAPI(APIView):
 
     def post(self, request, format=None):
         serializer = SpendingRulesSerializer(data = request.data)
-        
         if serializer.is_valid():
-            spendingrule = serializer.create()
+            enduser = EndUser.objects.get(django_user = request.user)
+            spendingrule = SpendingRules.objects.filter(user = enduser).update(**serializer.validated_data)
             return Response(data=serializer.data, status=status.HTTP_200_OK)
 
         return Response(data=serializer.errors, status=status.HTTP_400_BAD_REQUEST)

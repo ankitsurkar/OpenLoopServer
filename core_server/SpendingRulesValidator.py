@@ -1,7 +1,7 @@
 from .models import SpendingRules, EndUser
 import time
 import hashlib
-
+import requests
 def ValidateSpendingRule(enduser, amount):
     spending_rule = SpendingRules.objects.get(user = enduser)
     if spending_rule.enable_next_txn:
@@ -27,5 +27,23 @@ def ValidateSpendingRule(enduser, amount):
         return True        
 
 def SendLink(secret_no,enduser):
-    print(secret_no)
+    url = "http://api.msg91.com/api/v2/sendsms"
+    
+    message = "[Team Falcons]Click the following link to enable the next transaction:http://10.44.15.94:8001/olps/en/"+secret_no
+    body = {
+        "sender":"OPLOOP",
+        "route":4,
+        "country":91,
+        "sms":[{
+            "message":message,
+            "to":[enduser.phone_no]
+        }]
+    }
+    headers={
+        "authkey":"199192AN8u9SKkpL5a8d8d97",
+        "Content-Type":"application/json"
+    }
+    r = requests.post(url,json=body,headers=headers)
+    
+    print(r.json())
     return 

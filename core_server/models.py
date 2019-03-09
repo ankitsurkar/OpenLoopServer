@@ -67,7 +67,7 @@ class Transaction(models.Model):
 	
 class SpendingRules(models.Model):
     enable_next_txn = models.BooleanField(default=False)
-    secret_no = models.CharField(max_length=128,default=None)
+    secret_no = models.CharField(max_length=128,default=None, null=True)
     per_txn_amt_limit = models.IntegerField(default=100)
     total_txn_amt_limit = models.IntegerField(default=300)
     txn_no_limit = models.IntegerField(default=15)

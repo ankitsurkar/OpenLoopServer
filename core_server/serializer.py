@@ -47,7 +47,3 @@ class SpendingRulesSerializer(serializers.Serializer):
     reset_period = serializers.IntegerField(default=24 * 3600)
     start_time = serializers.IntegerField(default=time.time())
 
-    user = EndUserSerializer()
-
-    def create(self, validated_data):
-        return SpendingRules(**validated_data)
