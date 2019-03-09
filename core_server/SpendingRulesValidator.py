@@ -1,9 +1,12 @@
 from .models import SpendingRules, EndUser
 import time
+import hashlib
 
 def ValidateSpendingRule(enduser, amount):
     spending_rule = SpendingRules.objects.get(user = enduser)
     if spending_rule.enable_next_txn:
+        spending_rule.enable_next_txn = False
+        spending_rule.save()
         return True
 
     if (time.time() - spending_rule.start_time) > spending_rule.reset_period:
@@ -13,9 +16,16 @@ def ValidateSpendingRule(enduser, amount):
         spending_rule.save()
 
     if (spending_rule.txn_no == spending_rule.txn_no_limit) or (spending_rule.total_txn_amt + amount > spending_rule.total_txn_amt_limit) or (amount > spending_rule.per_txn_amt_limit):
+        spending_rule.secret_no = hashlib.sha1(str(enduser.django_user.password+str(time.time())).encode('utf-8')).hexdigest()
+        spending_rule.save()
+        SendLink(spending_rule.secret_no,enduser)
         return False
     else:
         spending_rule.txn_no = spending_rule.txn_no + 1
         spending_rule.total_txn_amt = spending_rule.total_txn_amt + amount
         spending_rule.save()
         return True        
+
+def SendLink(secret_no,enduser):
+    print(secret_no)
+    return 

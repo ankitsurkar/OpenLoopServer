@@ -43,6 +43,7 @@ class RFID(models.Model):
     rfid_value=models.CharField(max_length=128,null=False,blank=False)
     label=models.CharField(max_length=32,null=False)
     is_enabled=models.BooleanField(default=True)
+    pending_write=models.BooleanField(default=True)
     disability_reason=models.CharField(max_length=32,default='None')
     user=models.ForeignKey(EndUser,on_delete=models.CASCADE,null=False)
 
@@ -66,6 +67,7 @@ class Transaction(models.Model):
 	
 class SpendingRules(models.Model):
     enable_next_txn = models.BooleanField(default=False)
+    secret_no = models.CharField(max_length=128,default=None)
     per_txn_amt_limit = models.IntegerField(default=100)
     total_txn_amt_limit = models.IntegerField(default=300)
     txn_no_limit = models.IntegerField(default=15)
@@ -76,3 +78,6 @@ class SpendingRules(models.Model):
     txn_no = models.IntegerField(default=0)
 
     user = models.OneToOneField(EndUser,on_delete=models.CASCADE)
+
+    def __str__(self):
+        return '%s: %s'%(self.user.name,self.txn_no)

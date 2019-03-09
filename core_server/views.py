@@ -13,13 +13,15 @@ from .SpendingRulesValidator import ValidateSpendingRule
 import time
 import hashlib
 
-transaction_status = {0: "Successful", 1: "Initiated", 2: "RFID disabled", 3: "PoS disabled", 4: "Insufficient balance", 5: "Spending rule violation"}
+transaction_status = {0: "Successful", 1: "Initiated", 2: "RFID disabled", 3: "PoS disabled", 4: "Insufficient balance", 5: "Spending rule violation",6: "Invalid PoS",7 : "Invalid RFID"}
 SUCCESS = 0
 INITIATED = 1
 RFID_DISABLED = 2
 POS_DISABLED = 3
 INSUF_BALANCE = 4
 SPEND_RULE_VIO = 5
+INVALID_POS = 6
+INVALID_RFID = 7
 # Create your views here.
 
 class AddUser(APIView):
@@ -68,6 +70,7 @@ class Login(APIView):
 
         return Response(data=serializer.errors,status=status.HTTP_400_BAD_REQUEST)
 
+
 class PosView(APIView):
     authentication_classes = (TokenAuthentication,)
     permission_classes = (IsAuthenticated,)
@@ -107,7 +110,7 @@ class PosView(APIView):
                 serializer = PoSSerializer(pos)
                 return Response(data=serializer.data, status=status.HTTP_200_OK)
 
-            return Response(data={"error":"Invalid PoS value"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(data=serializer.data, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(data=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -139,15 +142,15 @@ class RFIDView(APIView):
         print(serializer)
         return Response(data= serializer.data, status=status.HTTP_200_OK)
     
-    #Disables a RFID
-    def delete(self, request, format=None):
+    #Disables/Enables a RFID
+    def put(self, request, format=None):
         serializer = RFIDSerializer(data = request.data)
 
         if serializer.is_valid():
             rfid = RFID.objects.filter(rfid_value = serializer.validated_data['rfid_value'])
             if rfid.count() == 1:
                 rfid = rfid[0]
-                rfid.is_enabled = False
+                rfid.is_enabled = not (rfid.is_enabled)
                 rfid.disability_reason = serializer.validated_data['disability_reason']
                 rfid.save()
                 serializer = RFIDSerializer(rfid)
@@ -156,6 +159,29 @@ class RFIDView(APIView):
             return Response(data={"error":"Invalid RFID value"}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(data=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class WriteRFID(APIView):
+    def get(self,request,format= None):
+        rfid = RFID.objects.filter(pending_write=True).first()
+        if rfid is not None:
+            rfid.pending_write = False
+            rfid.save()
+            return Response(data= RFIDSerializer(rfid).data, status = status.HTTP_200_OK)
+        else:
+            return Response(data = RFIDSerializer().data,status=status.HTTP_400_BAD_REQUEST)
+
+class AddMoney(APIView):
+    authentication_classes = (TokenAuthentication,)
+    permission_classes = (IsAuthenticated,)
+
+    def get(self,request,amount,format= None):
+        enduser =  EndUser.objects.get(django_user = request.user)
+        if amount > 0:
+            enduser.balance = enduser.balance + amount
+            enduser.save()
+            return Response(data=EndUserSerializer(enduser).data,status=status.HTTP_202_ACCEPTED)
+        return Response(data=EndUserSerializer(enduser).data, status = status.HTTP_400_BAD_REQUEST)
+
 
 class TransactDetails(APIView):
     authentication_classes = (TokenAuthentication,)
@@ -179,8 +205,16 @@ class TransactAPI(APIView):
         serializer = TransactionSerializer(data = request.data)
 
         if serializer.is_valid():
-            rfid = RFID.objects.get(rfid_value = serializer.validated_data['rfid']['rfid_value'])
-            pos = PoS.objects.get(api_key = serializer.validated_data['pos']['api_key'])
+            rfid = RFID.objects.filter(rfid_value = serializer.validated_data['rfid']['rfid_value']).first()
+            pos = PoS.objects.filter(api_key = serializer.validated_data['pos']['api_key']).first()
+
+            if rfid is None:
+                serializer.validated_data['txn_status'] = transaction_status[INVALID_RFID]
+                return Response(data=serializer.validated_data, status=status.HTTP_428_PRECONDITION_REQUIRED)
+            if pos is None:
+                serializer.validated_data['txn_status'] = transaction_status[INVALID_POS]
+                return Response(data=serializer.validated_data, status=status.HTTP_428_PRECONDITION_REQUIRED)
+
             txn_id = hashlib.sha1(str(time.time()).encode('utf-8')).hexdigest()
             transaction = Transaction.objects.create(txn_id = txn_id, amount = serializer.validated_data['amount'], lat = serializer.validated_data['lat'], lan = serializer.validated_data['lan'], rfid = rfid, pos = pos)
             transaction.save()
@@ -188,19 +222,19 @@ class TransactAPI(APIView):
             if not rfid.is_enabled:
                 transaction.txn_status = transaction_status[RFID_DISABLED]
                 transaction.save()
-                return Response(data=TransactionSerializer(transaction).data, status=status.HTTP_428_PRECONDITION_REQUIRED)
+                return Response(data=TransactionSerializer(transaction).data, status=status.HTTP_400_BAD_REQUEST)
             if not pos.is_enabled:
                 transaction.txn_status = transaction_status[POS_DISABLED]
                 transaction.save()
-                return Response(data=TransactionSerializer(transaction).data, status=status.HTTP_428_PRECONDITION_REQUIRED)
+                return Response(data=TransactionSerializer(transaction).data, status=status.HTTP_400_BAD_REQUEST)
             if rfid.user.balance < transaction.amount:
                 transaction.txn_status = transaction_status[INSUF_BALANCE]
                 transaction.save()
-                return Response(data=TransactionSerializer(transaction).data, status=status.HTTP_417_EXPECTATION_FAILED)
+                return Response(data=TransactionSerializer(transaction).data, status=status.HTTP_400_BAD_REQUEST)
             if not ValidateSpendingRule(rfid.user, transaction.amount):
                 transaction.txn_status = transaction_status[SPEND_RULE_VIO]
                 transaction.save()
-                return Response(data=TransactionSerializer(transaction).data, status=status.HTTP_417_EXPECTATION_FAILED)
+                return Response(data=TransactionSerializer(transaction).data, status=status.HTTP_400_BAD_REQUEST)
 
 
             enduser = rfid.user
@@ -229,12 +263,23 @@ class SpendingRuleAPI(APIView):
         return Response(data=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def get(self, request, format=None):
-        spending_rule = SpendingRules.objects.get(user__django_user = request.user)
+        spending_rule = SpendingRules.objects.filter(user__django_user = request.user).first()
 
         if spending_rule is not None:
             return Response(data=SpendingRulesSerializer(spending_rule).data, status=status.HTTP_200_OK)
 
         return Response(data=SpendingRulesSerializer().data, status=status.HTTP_400_BAD_REQUEST)
+
+class EnableNextTransaction(APIView):
+    def get(self, request, secret_no,format=None):
+        spending_rule = SpendingRules.objects.filter(secret_no=secret_no).first()
+        if spending_rule is not None:
+            spending_rule.enable_next_txn = True
+            spending_rule.save()
+            return render(request, 'enablenext.html')
+        else:
+            return render(request, '404.html')
+        
 
 
 

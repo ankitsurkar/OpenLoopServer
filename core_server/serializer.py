@@ -12,17 +12,18 @@ class EndUserSerializer(serializers.Serializer):
     phone_no = serializers.CharField(max_length = 13,required=True)
     is_vendor = serializers.BooleanField(required=True)
     token = serializers.CharField(max_length = 128, required = False)
+    balance = serializers.IntegerField(required = False)
 
 
 class RFIDSerializer(serializers.Serializer):
     rfid_value = serializers.CharField(max_length = 128,required = True)
-    label = serializers.CharField(max_length = 32, required = True)
+    label = serializers.CharField(max_length = 32, required = False, default = "Default label")
     is_enabled = serializers.BooleanField(required = False)
     disability_reason = serializers.CharField(max_length = 32, required = False)
 
 class PoSSerializer(serializers.Serializer):
     api_key = serializers.CharField(max_length = 128, required = True)
-    label = serializers.CharField(max_length = 32,required=True)
+    label = serializers.CharField(max_length = 32,required=False, default = "Default label")
     is_enabled = serializers.BooleanField(required=False)
 
 class TransactionSerializer(serializers.Serializer):
