@@ -6,11 +6,20 @@ from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.permissions import IsAuthenticated
-from core_server.models import EndUser,RFID,PoS
+from core_server.models import EndUser,RFID,PoS, Transaction, SpendingRules
 from rest_framework.authtoken.models import Token
-from core_server.serializer import EndUserSerializer, RFIDSerializer, PoSSerializer
+from core_server.serializer import EndUserSerializer, RFIDSerializer, PoSSerializer, TransactionSerializer, SpendingRulesSerializer
+from .SpendingRulesValidator import ValidateSpendingRule
 import time
 import hashlib
+
+transaction_status = {0: "Successful", 1: "Initiated", 2: "RFID disabled", 3: "PoS disabled", 4: "Insufficient balance", 5: "Spending rule violation"}
+SUCCESS = 0
+INITIATED = 1
+RFID_DISABLED = 2
+POS_DISABLED = 3
+INSUF_BALANCE = 4
+SPEND_RULE_VIO = 5
 # Create your views here.
 
 class AddUser(APIView):
@@ -20,38 +29,49 @@ class AddUser(APIView):
 
         if serializer.is_valid():
             
-            if User.objects.filter(username = serializer.validated_data['username']).count() > 0:
+            if User.objects.filter(username = serializer.validated_data['django_user']['username']).count() > 0:
                 return Response(data = {"error":"User already exists"},status=status.HTTP_400_BAD_REQUEST)
             
-            user = User.objects.create(username = serializer.validated_data['username'])
-            user.set_password(serializer.validated_data['password'])
+            user = User.objects.create(username = serializer.validated_data['django_user']['username'])
+            user.set_password(serializer.validated_data['django_user']['password'])
             user.save()
-            enduser = EndUser.objects.create(balance = 0,django_user = user, name = serializer.validated_data['name'],phone_no = serializer.validated_data['phone_no'])       
+            enduser = EndUser.objects.create(balance = 0,django_user = user, name = serializer.validated_data['name'],phone_no = serializer.validated_data['phone_no'], is_vendor = serializer.validated_data['is_vendor'])       
             enduser.save()
+            spending_rule = SpendingRules(user = enduser)
+            spending_rule.save()
             return Response(data=serializer.data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class Login(APIView):
+
     def post(self, request, format=None):    
         serializer = EndUserSerializer(data = request.data)
+
         if serializer.is_valid():
-            username = serializer.validated_data['username']
-            password = serializer.validated_data['password']
+            username = serializer.validated_data['django_user']['username']
+            password = serializer.validated_data['django_user']['password']
             print("uname: %s pass: %s"%(username,password))
             user = authenticate(username = username,password = password)
-            if Token.objects.filter(user = user).count() > 0:
-                token = Token.objects.get(user=user)
+
+            if user is not None:
+                
+                enduser = EndUser.objects.get(django_user = user)
+                if enduser.token is None:
+                    token, created = Token.objects.get_or_create(user=user)
+                    enduser.token = token.key
+                    enduser.save()                
+                return Response(data=EndUserSerializer(enduser).data, status=status.HTTP_200_OK)
+
             else:
-                token = Token.objects.create(user=user)
-            return Response(data={"token":token.key}, status=status.HTTP_200_OK)
-        
-            #except:
-            #    return Response({'Error':'Invalid Username or Password'}, status =status.HTTP_401_UNAUTHORIZED)
+                return Response(data=serializer.data, status=status.HTTP_401_UNAUTHORIZED)
+
         return Response(data=serializer.errors,status=status.HTTP_400_BAD_REQUEST)
+
 class PosView(APIView):
     authentication_classes = (TokenAuthentication,)
     permission_classes = (IsAuthenticated,)
+
     def post(self, request, format=None):
         serializer = PoSSerializer(data = request.data)
     
@@ -65,7 +85,7 @@ class PosView(APIView):
             return Response(data = PoSSerializer(pos).data,status=status.HTTP_201_CREATED)
         return Response(data=serializer.errors,status=status.HTTP_400_BAD_REQUEST)
 
-     #Returns a list of RFIDs
+     #Returns a list of PoSs
     def get(self, request, format =None):
         enduser = EndUser.objects.get(django_user = request.user)
         pos = PoS.objects.filter(vendor = enduser)
@@ -74,7 +94,7 @@ class PosView(APIView):
         print(serializer)
         return Response(data= serializer.data, status=status.HTTP_200_OK)
     
-    #Disables a RFID
+    #Disables a PoS
     def delete(self, request, format=None):
         serializer = PoSSerializer(data = request.data)
 
@@ -136,5 +156,85 @@ class RFIDView(APIView):
             return Response(data={"error":"Invalid RFID value"}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(data=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class TransactDetails(APIView):
+    authentication_classes = (TokenAuthentication,)
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request, format = None):
+        enduser = EndUser.objects.get(django_user = request.user)
+        if not enduser.is_vendor:
+            transactions = Transaction.objects.filter(rfid__user = enduser)
+            serializer = TransactionSerializer(transactions, many = True)
+            return Response(data = serializer.data, status=status.HTTP_200_OK)
+        else:
+            transactions = Transaction.objects.filter(pos__vendor = enduser)
+            serializer = TransactionSerializer(transactions, many = True)
+            return Response(data = serializer.data, status=status.HTTP_200_OK)
+
+    
+class TransactAPI(APIView):
+
+    def post(self, request, format = None):
+        serializer = TransactionSerializer(data = request.data)
+
+        if serializer.is_valid():
+            rfid = RFID.objects.get(rfid_value = serializer.validated_data['rfid']['rfid_value'])
+            pos = PoS.objects.get(api_key = serializer.validated_data['pos']['api_key'])
+            txn_id = hashlib.sha1(str(time.time()).encode('utf-8')).hexdigest()
+            transaction = Transaction.objects.create(txn_id = txn_id, amount = serializer.validated_data['amount'], lat = serializer.validated_data['lat'], lan = serializer.validated_data['lan'], rfid = rfid, pos = pos)
+            transaction.save()
+
+            if not rfid.is_enabled:
+                transaction.txn_status = transaction_status[RFID_DISABLED]
+                transaction.save()
+                return Response(data=TransactionSerializer(transaction).data, status=status.HTTP_428_PRECONDITION_REQUIRED)
+            if not pos.is_enabled:
+                transaction.txn_status = transaction_status[POS_DISABLED]
+                transaction.save()
+                return Response(data=TransactionSerializer(transaction).data, status=status.HTTP_428_PRECONDITION_REQUIRED)
+            if rfid.user.balance < transaction.amount:
+                transaction.txn_status = transaction_status[INSUF_BALANCE]
+                transaction.save()
+                return Response(data=TransactionSerializer(transaction).data, status=status.HTTP_417_EXPECTATION_FAILED)
+            if not ValidateSpendingRule(rfid.user, transaction.amount):
+                transaction.txn_status = transaction_status[SPEND_RULE_VIO]
+                transaction.save()
+                return Response(data=TransactionSerializer(transaction).data, status=status.HTTP_417_EXPECTATION_FAILED)
+
+
+            enduser = rfid.user
+            enduser.balance -= transaction.amount
+            pos_user = pos.vendor 
+            pos_user.balance += transaction.amount
+            enduser.save()
+            pos_user.save()
+            transaction.txn_status = transaction_status[SUCCESS]
+            transaction.save()
+            return Response(data=TransactionSerializer(transaction).data, status= status.HTTP_202_ACCEPTED)
+        return Response(data=serializer.errors, status= status.HTTP_400_BAD_REQUEST)
+
+                
+class SpendingRuleAPI(APIView):
+    authentication_classes = (TokenAuthentication,)
+    permission_classes = (IsAuthenticated,)
+
+    def post(self, request, format=None):
+        serializer = SpendingRulesSerializer(data = request.data)
+        
+        if serializer.is_valid():
+            spendingrule = serializer.create()
+            return Response(data=serializer.data, status=status.HTTP_200_OK)
+
+        return Response(data=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def get(self, request, format=None):
+        spending_rule = SpendingRules.objects.get(user__django_user = request.user)
+
+        if spending_rule is not None:
+            return Response(data=SpendingRulesSerializer(spending_rule).data, status=status.HTTP_200_OK)
+
+        return Response(data=SpendingRulesSerializer().data, status=status.HTTP_400_BAD_REQUEST)
+
 
 
