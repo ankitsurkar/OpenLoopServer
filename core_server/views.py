@@ -28,7 +28,6 @@ class AddUser(APIView):
 
     def post(self, request, format = None):
         serializer = EndUserSerializer(data = request.data)
-
         if serializer.is_valid():
             
             if User.objects.filter(username = serializer.validated_data['django_user']['username']).count() > 0:
@@ -38,10 +37,12 @@ class AddUser(APIView):
             user.set_password(serializer.validated_data['django_user']['password'])
             user.save()
             enduser = EndUser.objects.create(balance = 0,django_user = user, name = serializer.validated_data['name'],phone_no = serializer.validated_data['phone_no'], is_vendor = serializer.validated_data['is_vendor'])       
+            token, created = Token.objects.get_or_create(user = enduser.django_user)
+            enduser.token = token.key
             enduser.save()
             spending_rule = SpendingRules.objects.create(user = enduser)
             spending_rule.save()
-            return Response(data=serializer.data, status=status.HTTP_201_CREATED)
+            return Response(data=EndUserSerializer(enduser).data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -138,9 +139,7 @@ class RFIDView(APIView):
     def get(self, request, format =None):
         enduser = EndUser.objects.get(django_user = request.user)
         rfids = RFID.objects.filter(user = enduser)
-        print(rfids)
         serializer = RFIDSerializer(rfids, many = True)
-        print(serializer)
         return Response(data= serializer.data, status=status.HTTP_200_OK)
     
     #Disables/Enables a RFID
@@ -180,7 +179,7 @@ class AddMoney(APIView):
         if amount > 0:
             enduser.balance = enduser.balance + amount
             enduser.save()
-            return Response(data=EndUserSerializer(enduser).data,status=status.HTTP_202_ACCEPTED)
+            return Response(data=EndUserSerializer(enduser).data,status=status.HTTP_200_OK)
         return Response(data=EndUserSerializer(enduser).data, status = status.HTTP_400_BAD_REQUEST)
 
 
@@ -258,7 +257,7 @@ class SpendingRuleAPI(APIView):
         serializer = SpendingRulesSerializer(data = request.data)
         if serializer.is_valid():
             enduser = EndUser.objects.get(django_user = request.user)
-            spendingrule = SpendingRules.objects.filter(user = enduser).update(**serializer.validated_data)
+            spendingrule = SpendingRules.objects.filter(user = enduser).update(per_txn_amt_limit = serializer.validated_data['per_txn_amt_limit'], total_txn_amt_limit = serializer.validated_data['total_txn_amt_limit'], txn_no_limit = serializer.validated_data['txn_no_limit'])
             return Response(data=serializer.data, status=status.HTTP_200_OK)
 
         return Response(data=serializer.errors, status=status.HTTP_400_BAD_REQUEST)

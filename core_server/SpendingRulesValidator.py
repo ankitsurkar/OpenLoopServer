@@ -29,7 +29,7 @@ def ValidateSpendingRule(enduser, amount):
 def SendLink(secret_no,enduser):
     url = "http://api.msg91.com/api/v2/sendsms"
     
-    message = "[Team Falcons]Click the following link to enable the next transaction:http://10.44.15.94:8001/olps/en/"+secret_no
+    message = "[Team Falcons]Click the following link to enable the next transaction:http://10.44.15.94:8000/olps/en/"+secret_no
     body = {
         "sender":"OPLOOP",
         "route":4,

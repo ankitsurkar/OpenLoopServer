@@ -1,5 +1,5 @@
 import requests
-for i in range(40):
+for i in range(45):
     url = "http://10.44.15.94:8000/olps/transact"
     body = {
 	"rfid":{
@@ -14,8 +14,8 @@ for i in range(40):
     "is_enabled": "true"
 },
 	"amount":10,
-	"lat":18.9247995,
-	"lan":72.8188888
+	"lat":18.933356,
+	"lan":72.827640
 }
     headers = {
     "authkey":"199192AN8u9SKkpL5a8d8d97",
